@@ -1,11 +1,21 @@
 /* modifier 0 means no modifier */
 static int surfuseragent    = 1;  /* Append Surf version to default WebKit user agent */
 static char *fulluseragent  = ""; /* Or override the whole user agent string */
-static char *scriptfile     = "~/.surf/script.js";
-static char *styledir       = "~/.surf/styles/";
-static char *certdir        = "~/.surf/certificates/";
-static char *cachedir       = "~/.surf/cache/";
-static char *cookiefile     = "~/.surf/cookies.txt";
+static char *scriptfile     = "~/.config/surf/script.js";
+static char *styledir       = "~/.config/surf/styles/";
+static char *certdir        = "~/.config/surf/certificates/";
+static char *cachedir       = "~/.config/surf/cache/";
+static char *cookiefile     = "~/.config/surf/cookies.txt";
+static char *externalpipe_sigusr1[] = {"/bin/sh", "-c", "externalpipe_buffer.sh surf_strings_read"};
+static char *linkselect_curwin [] = { "/bin/sh", "-c",
+	"surf_linkselect.sh $0 'Link' | xargs -r xprop -id $0 -f _SURF_GO 8s -set _SURF_GO",
+	winid, NULL
+};
+static char *linkselect_newwin [] = { "/bin/sh", "-c",
+	"surf_linkselect.sh $0 'Link (new window)' | xargs -r surf",
+	winid, NULL
+};
+static char *editscreen[] = { "/bin/sh", "-c", "edit_screen.sh", NULL };
 
 /* Webkit default features */
 /* Highest priority value will be used.
@@ -25,7 +35,7 @@ static Parameter defconfig[ParameterLast] = {
 	[DiskCache]           =       { { .i = 1 },     },
 	[DNSPrefetch]         =       { { .i = 0 },     },
 	[FileURLsCrossAccess] =       { { .i = 0 },     },
-	[FontSize]            =       { { .i = 12 },    },
+	[FontSize]            =       { { .i = 14 },    },
 	[FrameFlattening]     =       { { .i = 0 },     },
 	[Geolocation]         =       { { .i = 0 },     },
 	[HideBackground]      =       { { .i = 0 },     },
@@ -47,7 +57,7 @@ static Parameter defconfig[ParameterLast] = {
 	[StrictTLS]           =       { { .i = 1 },     },
 	[Style]               =       { { .i = 1 },     },
 	[WebGL]               =       { { .i = 0 },     },
-	[ZoomLevel]           =       { { .f = 1.0 },   },
+	[ZoomLevel]           =       { { .f = 2.0 },   },
 };
 
 static UriParameters uriparams[] = {
@@ -71,18 +81,27 @@ static WebKitFindOptions findopts = WEBKIT_FIND_OPTIONS_CASE_INSENSITIVE |
         .v = (const char *[]){ "/bin/sh", "-c", \
              "prop=\"$(printf '%b' \"$(xprop -id $1 $2 " \
              "| sed \"s/^$2(STRING) = //;s/^\\\"\\(.*\\)\\\"$/\\1/\")\" " \
-             "| dmenu -p \"$4\" -w $1)\" && xprop -id $1 -f $3 8s -set $3 \"$prop\"", \
+             "| dmenu -p \"$4\" -w $1)\" && xprop -id $1 -f $3 8u -set $3 \"$prop\"", \
              "surf-setprop", winid, r, s, p, NULL \
         } \
 }
 
 /* DOWNLOAD(URI, referer) */
-#define DOWNLOAD(u, r) { \
-        .v = (const char *[]){ "st", "-e", "/bin/sh", "-c",\
-             "curl -g -L -J -O -A \"$1\" -b \"$2\" -c \"$2\"" \
-             " -e \"$3\" \"$4\"; read", \
-             "surf-download", useragent, cookiefile, r, u, NULL \
-        } \
+//#define DOWNLOAD(u, r) { \
+        //.v = (const char *[]){ "st", "-e", "/bin/sh", "-c",\
+             //"curl -g -L -J -O -A \"$1\" -b \"$2\" -c \"$2\"" \
+             //" -e \"$3\" \"$4\"; read", \
+             //"surf-download", useragent, cookiefile, r, u, NULL \
+        //} \
+//}
+#define DOWNLOAD(d, r) { \
+	.v = (char *[]){ "/bin/sh", "-c", \
+		"cd ~/Telechargements;"\
+		"st -e /bin/sh -c \"aria2c -U '$1'" \
+		" --referer '$2' --load-cookies $3 --save-cookies $3 '$0';" \
+		" sleep 3;\"", \
+		d, useragent, r, cookiefile, NULL \
+	} \
 }
 
 /* PLUMB(URI) */
@@ -130,44 +149,42 @@ static SiteSpecific certs[] = {
  */
 static Key keys[] = {
 	/* modifier              keyval          function    arg */
-	{ 0,                     GDK_KEY_g,      spawn,      SETPROP("_SURF_URI", "_SURF_GO", PROMPT_GO) },
-	{ 0,                     GDK_KEY_f,      spawn,      SETPROP("_SURF_FIND", "_SURF_FIND", PROMPT_FIND) },
-	{ 0,                     GDK_KEY_slash,  spawn,      SETPROP("_SURF_FIND", "_SURF_FIND", PROMPT_FIND) },
 
-	{ 0,                     GDK_KEY_i,      insert,     { .i = 1 } },
-	{ 0,                     GDK_KEY_Escape, insert,     { .i = 0 } },
+	{ MODKEY,                GDK_KEY_g,      spawn,      SETPROP("_SURF_URI", "_SURF_GO", PROMPT_GO) },
+	{ MODKEY,                GDK_KEY_f,      spawn,      SETPROP("_SURF_FIND", "_SURF_FIND", PROMPT_FIND) },
+	{ MODKEY,                GDK_KEY_slash,  spawn,      SETPROP("_SURF_FIND", "_SURF_FIND", PROMPT_FIND) },
+	{ 0,                     GDK_KEY_Escape, stop,       { 0 } },
+	{ MODKEY,                GDK_KEY_c,      stop,       { 0 } },
 
-	{ 0,                     GDK_KEY_c,      stop,       { 0 } },
+	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_r,      reload,     { .i = 1 } },
+	{ MODKEY,                GDK_KEY_r,      reload,     { .i = 0 } },
 
-	{ MODKEY,                GDK_KEY_r,      reload,     { .i = 1 } },
-	{ 0,                     GDK_KEY_r,      reload,     { .i = 0 } },
-
-	{ 0,                     GDK_KEY_l,      navigate,   { .i = +1 } },
-	{ 0,                     GDK_KEY_h,      navigate,   { .i = -1 } },
+	{ MODKEY,                GDK_KEY_l,      navigate,   { .i = +1 } },
+	{ MODKEY,                GDK_KEY_h,      navigate,   { .i = -1 } },
 
 	/* vertical and horizontal scrolling, in viewport percentage */
-	{ 0,                     GDK_KEY_j,      scrollv,    { .i = +10 } },
-	{ 0,                     GDK_KEY_k,      scrollv,    { .i = -10 } },
-	{ 0,                     GDK_KEY_space,  scrollv,    { .i = +50 } },
-	{ 0,                     GDK_KEY_b,      scrollv,    { .i = -50 } },
-	{ 0,                     GDK_KEY_i,      scrollh,    { .i = +10 } },
-	{ 0,                     GDK_KEY_u,      scrollh,    { .i = -10 } },
+	{ MODKEY,                GDK_KEY_j,      scrollv,    { .i = +10 } },
+	{ MODKEY,                GDK_KEY_k,      scrollv,    { .i = -10 } },
+	{ MODKEY,                GDK_KEY_space,  scrollv,    { .i = +50 } },
+	{ MODKEY,                GDK_KEY_b,      scrollv,    { .i = -50 } },
+	{ MODKEY,                GDK_KEY_i,      scrollh,    { .i = +10 } },
+	{ MODKEY,                GDK_KEY_u,      scrollh,    { .i = -10 } },
 
 
-	{ 0|GDK_SHIFT_MASK,      GDK_KEY_j,      zoom,       { .i = -1 } },
-	{ 0|GDK_SHIFT_MASK,      GDK_KEY_k,      zoom,       { .i = +1 } },
-	{ 0|GDK_SHIFT_MASK,      GDK_KEY_q,      zoom,       { .i = 0  } },
-	{ 0,                     GDK_KEY_minus,  zoom,       { .i = -1 } },
-	{ 0|GDK_SHIFT_MASK,      GDK_KEY_plus,   zoom,       { .i = +1 } },
-	{ 0,                     GDK_KEY_equal,  zoom,       { .i = 0  } },
+	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_j,      zoom,       { .i = -1 } },
+	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_k,      zoom,       { .i = +1 } },
+	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_q,      zoom,       { .i = 0  } },
+	{ MODKEY,                GDK_KEY_minus,  zoom,       { .i = -1 } },
+	{ MODKEY,                GDK_KEY_plus,   zoom,       { .i = +1 } },
 
-	{ 0,                     GDK_KEY_p,      clipboard,  { .i = 1 } },
-	{ 0,                     GDK_KEY_y,      clipboard,  { .i = 0 } },
+	{ MODKEY,                GDK_KEY_p,      clipboard,  { .i = 1 } },
+	{ MODKEY,                GDK_KEY_y,      clipboard,  { .i = 0 } },
 
-	{ 0,                     GDK_KEY_n,      find,       { .i = +1 } },
-	{ 0|GDK_SHIFT_MASK,      GDK_KEY_n,      find,       { .i = -1 } },
+	{ MODKEY,                GDK_KEY_n,      find,       { .i = +1 } },
+	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_n,      find,       { .i = -1 } },
 
-	{ MODKEY,                GDK_KEY_p,      print,      { 0 } },
+
+	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_p,      print,      { 0 } },
 	{ MODKEY,                GDK_KEY_t,      showcert,   { 0 } },
 
 	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_a,      togglecookiepolicy, { 0 } },
@@ -183,6 +200,9 @@ static Key keys[] = {
 	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_b,      toggle,     { .i = ScrollBars } },
 	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_t,      toggle,     { .i = StrictTLS } },
 	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_m,      toggle,     { .i = Style } },
+	{ MODKEY,                GDK_KEY_d, externalpipe,    { .v = linkselect_curwin } },
+	{ GDK_SHIFT_MASK|MODKEY, GDK_KEY_d, externalpipe,    { .v = linkselect_newwin } },
+	{ MODKEY,                GDK_KEY_o, externalpipe,    { .v = editscreen        } },
 };
 
 /* button definitions */
