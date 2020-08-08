@@ -57,7 +57,8 @@ static Parameter defconfig[ParameterLast] = {
 	[StrictTLS]           =       { { .i = 1 },     },
 	[Style]               =       { { .i = 1 },     },
 	[WebGL]               =       { { .i = 0 },     },
-	[ZoomLevel]           =       { { .f = 2.0 },   },
+	[ZoomLevel]           =       { { .f = 1.8 },   },
+	[ClipboardNotPrimary] =		  { { .i = 1 },	    },
 };
 
 static UriParameters uriparams[] = {
@@ -77,14 +78,15 @@ static WebKitFindOptions findopts = WEBKIT_FIND_OPTIONS_CASE_INSENSITIVE |
 #define PROMPT_FIND "Find:"
 
 /* SETPROP(readprop, setprop, prompt)*/
-#define SETPROP(r, s, p) { \
-        .v = (const char *[]){ "/bin/sh", "-c", \
-             "prop=\"$(printf '%b' \"$(xprop -id $1 $2 " \
-             "| sed \"s/^$2(STRING) = //;s/^\\\"\\(.*\\)\\\"$/\\1/\")\" " \
-             "| dmenu -p \"$4\" -w $1)\" && xprop -id $1 -f $3 8u -set $3 \"$prop\"", \
-             "surf-setprop", winid, r, s, p, NULL \
-        } \
-}
+#define SETPROP(p) { .v = (char *[]){ "/bin/sh", "-c", "surf.sh $0 $1", winid, p, NULL } }
+//#define SETPROP(r, s, p) { \
+        //.v = (const char *[]){ "/bin/sh", "-c", \
+             //"prop=\"$(printf '%b' \"$(xprop -id $1 $2 " \
+             //"| sed \"s/^$2(STRING) = //;s/^\\\"\\(.*\\)\\\"$/\\1/\")\" " \
+             //"| dmenu -p \"$4\" -w $1)\" && xprop -id $1 -f $3 8u -set $3 \"$prop\"", \
+             //"surf-setprop", winid, r, s, p, NULL \
+        //} \
+//}
 
 /* DOWNLOAD(URI, referer) */
 //#define DOWNLOAD(u, r) { \
@@ -149,10 +151,14 @@ static SiteSpecific certs[] = {
  */
 static Key keys[] = {
 	/* modifier              keyval          function    arg */
-	{ 0,                     GDK_KEY_g,      spawn,      SETPROP("_SURF_URI", "_SURF_GO", PROMPT_GO) },
-	{ 0,                     GDK_KEY_f,      spawn,      SETPROP("_SURF_FIND", "_SURF_FIND", PROMPT_FIND) },
-	{ 0,                     GDK_KEY_slash,  spawn,      SETPROP("_SURF_FIND", "_SURF_FIND", PROMPT_FIND) },
+	{ 0,                     GDK_KEY_g,      spawn,      SETPROP("_SURF_URI") },
+	{ 0|GDK_SHIFT_MASK,      GDK_KEY_g,      spawn,      SETPROP("_SURF_URI_RAW") },
+	{ 0,                     GDK_KEY_o,      spawn,      SETPROP("_SURF_URI") },
+	{ 0|GDK_SHIFT_MASK,      GDK_KEY_o,      spawn,      SETPROP("_SURF_URI_RAW") },
+	{ 0,                     GDK_KEY_f,      spawn,      SETPROP("_SURF_FIND") },
+	{ 0,                     GDK_KEY_b,      spawn,      SETPROP("_SURF_BMARK") },
 
+	{ 0,                     GDK_KEY_w,      playexternal, { 0 } },
 	{ 0,                     GDK_KEY_i,      insert,     { .i = 1 } },
 	{ 0,                     GDK_KEY_Escape, insert,     { .i = 0 } },
 
@@ -168,7 +174,7 @@ static Key keys[] = {
 	{ 0,                     GDK_KEY_j,      scrollv,    { .i = +10 } },
 	{ 0,                     GDK_KEY_k,      scrollv,    { .i = -10 } },
 	{ 0,                     GDK_KEY_space,  scrollv,    { .i = +50 } },
-	{ 0,                     GDK_KEY_b,      scrollv,    { .i = -50 } },
+	{ 0|GDK_SHIFT_MASK,      GDK_KEY_space,  scrollv,    { .i = -50 } },
 	{ 0,                     GDK_KEY_i,      scrollh,    { .i = +10 } },
 	{ 0,                     GDK_KEY_u,      scrollh,    { .i = -10 } },
 
@@ -190,9 +196,9 @@ static Key keys[] = {
 	{ MODKEY,                GDK_KEY_p,      print,      { 0 } },
 	{ MODKEY,                GDK_KEY_t,      showcert,   { 0 } },
 
-	{ 0|GDK_SHIFT_MASK, GDK_KEY_a,      togglecookiepolicy, { 0 } },
+	{ 0|GDK_SHIFT_MASK,      GDK_KEY_a,      togglecookiepolicy, { 0 } },
 	{ 0,                     GDK_KEY_F11,    togglefullscreen, { 0 } },
-	{ 0|GDK_SHIFT_MASK,      GDK_KEY_o,      toggleinspector, { 0 } },
+	{ 0|GDK_SHIFT_MASK,      GDK_KEY_w,      toggleinspector, { 0 } },
 
 	{ 0|GDK_SHIFT_MASK,      GDK_KEY_c,      toggle,     { .i = CaretBrowsing } },
 	{ 0|GDK_SHIFT_MASK,      GDK_KEY_f,      toggle,     { .i = FrameFlattening } },
@@ -205,7 +211,7 @@ static Key keys[] = {
 	{ 0|GDK_SHIFT_MASK,      GDK_KEY_m,      toggle,     { .i = Style } },
 	{ 0,                     GDK_KEY_d, externalpipe,    { .v = linkselect_curwin } },
 	{ 0|GDK_SHIFT_MASK,      GDK_KEY_d, externalpipe,    { .v = linkselect_newwin } },
-	{ 0,                     GDK_KEY_o, externalpipe,    { .v = editscreen        } },
+	{ 0,                     GDK_KEY_e, externalpipe,    { .v = editscreen        } },
 };
 
 /* button definitions */
